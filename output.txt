@@ -1,0 +1,70 @@
+0% of Total Parameters: 0
+Details saved to checking_data/selected_layers_params.txt
+bn_weights_counts : [16, 32, 16, 16, 32, 16, 16, 64, 32, 32, 64, 32, 32, 32, 32, 128, 64, 64, 128, 64, 64, 64, 64, 64, 64, 256, 128, 128, 256, 128, 128, 128, 256, 128, 64, 64, 128, 64, 64, 64, 32, 32, 64, 32, 32, 64, 64, 64, 128, 64, 64, 128, 128, 128, 256, 128, 128]
+Suggested Gamma threshold should be less than 0.6714.
+The corresponding prune ratio is 0.262
+SORTED BN LENGTH: 4752
+Threshold index: len(sorted_bn) * percent = thre_index 
+Threshold index: 4752 * 0.2 = 950 
+thre: 0.6162109375
+Gamma value that less than 0.6162 are set to zero!
+==============================================================================================
+|	layer name               |         origin channels     |         remaining channels  |
+|	model.0.bn               |         16                  |         16                  |
+|	model.1.bn               |         32                  |         32                  |
+|	model.2.cv1.bn           |         16                  |         16                  |
+|	model.2.cv2.bn           |         16                  |         16                  |
+|	model.2.cv3.bn           |         32                  |         29                  |
+|	model.2.m.0.cv1.bn       |         16                  |         16                  |
+|	model.2.m.0.cv2.bn       |         16                  |         15                  |
+|	model.3.bn               |         64                  |         54                  |
+|	model.4.cv1.bn           |         32                  |         5                   |
+|	model.4.cv2.bn           |         32                  |         31                  |
+|	model.4.cv3.bn           |         64                  |         36                  |
+|	model.4.m.0.cv1.bn       |         32                  |         23                  |
+|	model.4.m.0.cv2.bn       |         32                  |         23                  |
+|	model.4.m.1.cv1.bn       |         32                  |         22                  |
+|	model.4.m.1.cv2.bn       |         32                  |         32                  |
+|	model.5.bn               |         128                 |         89                  |
+|	model.6.cv1.bn           |         64                  |         5                   |
+|	model.6.cv2.bn           |         64                  |         64                  |
+|	model.6.cv3.bn           |         128                 |         101                 |
+|	model.6.m.0.cv1.bn       |         64                  |         61                  |
+|	model.6.m.0.cv2.bn       |         64                  |         23                  |
+|	model.6.m.1.cv1.bn       |         64                  |         59                  |
+|	model.6.m.1.cv2.bn       |         64                  |         48                  |
+|	model.6.m.2.cv1.bn       |         64                  |         60                  |
+|	model.6.m.2.cv2.bn       |         64                  |         62                  |
+|	model.7.bn               |         256                 |         255                 |
+|	model.8.cv1.bn           |         128                 |         25                  |
+|	model.8.cv2.bn           |         128                 |         128                 |
+|	model.8.cv3.bn           |         256                 |         256                 |
+|	model.8.m.0.cv1.bn       |         128                 |         127                 |
+|	model.8.m.0.cv2.bn       |         128                 |         128                 |
+|	model.9.cv1.bn           |         128                 |         116                 |
+|	model.9.cv2.bn           |         256                 |         238                 |
+|	model.10.bn              |         128                 |         114                 |
+|	model.13.cv1.bn          |         64                  |         32                  |
+|	model.13.cv2.bn          |         64                  |         34                  |
+|	model.13.cv3.bn          |         128                 |         84                  |
+|	model.13.m.0.cv1.bn      |         64                  |         33                  |
+|	model.13.m.0.cv2.bn      |         64                  |         36                  |
+|	model.14.bn              |         64                  |         22                  |
+|	model.17.cv1.bn          |         32                  |         5                   |
+|	model.17.cv2.bn          |         32                  |         8                   |
+|	model.17.cv3.bn          |         64                  |         64                  |
+|	model.17.m.0.cv1.bn      |         32                  |         3                   |
+|	model.17.m.0.cv2.bn      |         32                  |         21                  |
+|	model.18.bn              |         64                  |         41                  |
+|	model.20.cv1.bn          |         64                  |         37                  |
+|	model.20.cv2.bn          |         64                  |         28                  |
+|	model.20.cv3.bn          |         128                 |         127                 |
+|	model.20.m.0.cv1.bn      |         64                  |         12                  |
+|	model.20.m.0.cv2.bn      |         64                  |         52                  |
+|	model.21.bn              |         128                 |         109                 |
+|	model.23.cv1.bn          |         128                 |         123                 |
+|	model.23.cv2.bn          |         128                 |         125                 |
+|	model.23.cv3.bn          |         256                 |         249                 |
+|	model.23.m.0.cv1.bn      |         128                 |         112                 |
+|	model.23.m.0.cv2.bn      |         128                 |         123                 |
+==============================================================================================

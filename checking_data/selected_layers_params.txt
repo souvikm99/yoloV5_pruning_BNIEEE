@@ -1,0 +1,5 @@
+Target Percentage: 0% of Total Parameters: 0.0 (Approx.)
+Selected layers and parameters to reach ~0%:
+
+Total Selected Parameters: 0
+Total Model Parameters: 1772035

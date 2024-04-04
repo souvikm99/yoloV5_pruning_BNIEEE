@@ -1,0 +1,13 @@
+train: my_crops_data_320/train/images
+val: my_crops_data_320/valid/images
+test: my_crops_data_320/test/images
+
+nc: 6
+names: ['banana', 'carrot', 'green_chilli', 'orange', 'soya', 'tomato']
+
+roboflow:
+  workspace: cviitpkd
+  project: my_crops_data
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/cviitpkd/my_crops_data/dataset/1
