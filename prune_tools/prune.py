@@ -214,6 +214,32 @@ def save_pruned_channels_info(maskbndict, filepath):
                 file.write(f"Pruned Channels Indexes: {pruned_channels}\n\n")
                 total_pruned_channels += num_pruned_channels
         file.write(f"Total Pruned Channels across all BN layers: {total_pruned_channels}\n")
+
+#save connected convolution layers channels
+def save_bn_conv_params(model, filepath):
+    total_params = 0  # Initialize total parameters counter
+    
+    with open(filepath, 'w') as file:
+        for name, module in model.named_modules():
+            if isinstance(module, nn.BatchNorm2d):
+                # Assuming the naming convention Conv -> BN
+                conv_name = name.rsplit('.', 1)[0] + '.conv'  # This might need adjustment
+                conv_layer = dict(model.named_modules()).get(conv_name, None)
+                
+                if conv_layer and isinstance(conv_layer, nn.Conv2d):
+                    # Calculate the number of parameters in the Conv layer
+                    # Parameters = out_channels * (in_channels * kernel_height * kernel_width)
+                    conv_params = conv_layer.out_channels * (conv_layer.in_channels * 
+                                                             conv_layer.kernel_size[0] * conv_layer.kernel_size[1])
+                    total_params += conv_params  # Accumulate the total parameters
+                    
+                    # Write detailed information about the layer
+                    file.write(f"BN Layer: {name}, Connected Conv Layer: {conv_name}, Number of Parameters: {conv_params}\n")
+        
+        # After iterating through all layers, write the total parameters
+        file.write(f"\nTotal Number of Parameters (from connected Conv layers to BN layers): {total_params}\n")
+
+
 #######END CUSTOM FUNCTIONS###########
 
 
@@ -271,6 +297,8 @@ def run_prune(data,
     print(f"{opt.percent_new}% of Total Parameters: {percent_params:.0f}")
     # Use this function to calculate and save layers and parameters
     accumulate_parameters_to_percentage(model, opt.percent_new, 'checking_data/selected_layers_params.txt')
+    #layer wise channel parameter for each connected bn layer
+    save_bn_conv_params(model, 'checking_data/bn_conv_params.txt')
 
     # =========================================== prune model ====================================#
     # print("model.module_list:",model.named_children())
@@ -285,6 +313,8 @@ def run_prune(data,
                 ignore_bn_list.append(i.rsplit(".", 2)[0] + ".cv1.bn")
                 ignore_bn_list.append(i + '.cv1.bn')
                 ignore_bn_list.append(i + '.cv2.bn')
+                print(f'{i.rsplit(".", 2)[0] + ".cv1.bn"} | {i + ".cv1.bn"} | {i + ".cv2.bn"}')
+    # print(f"ignore bn list: {ignore_bn_list}")
     for i, layer in model.named_modules():
         if isinstance(layer, torch.nn.BatchNorm2d):
             if i not in ignore_bn_list:
@@ -556,6 +586,8 @@ def run_prune(data,
 
     # Start validating the metrics of the pruned model
     model = pruned_model
+    #after prunning layer wise channel parameter for each connected bn layer
+    save_bn_conv_params(model, 'checking_data/after_bn_conv_params.txt')
     model.to(device).eval()
     # model.cuda().eval()
 
