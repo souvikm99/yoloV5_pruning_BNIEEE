@@ -78,6 +78,7 @@ def gather_bn_weights(module_list):
     return bn_weights
 
 
+
 # The function obtain_bn_mask computes a binary mask for the Batch Normalization 
 # (BN) layer weights based on a threshold thre. Here's how it works:
 
@@ -89,13 +90,30 @@ def gather_bn_weights(module_list):
 # the threshold and should be retained.
 
 
-def obtain_bn_mask(bn_module, thre, device):
-    # thre = thre.cuda()
-    thre = thre.to(device)
+# def obtain_bn_mask(bn_module, thre, device):
+#     # thre = thre.cuda()
+#     thre = thre.to(device)
+#     mask = bn_module.weight.data.abs().ge(thre).float()
+
+#     bn_mask_file_name = f'checking_data/bn_masks/{bn_module}_bn_mask.txt'
+#         # Save the mask to a file in a human-readable format
+#     with open(bn_mask_file_name, 'w') as f:
+#         # Convert the mask to a numpy array for easy iteration
+#         mask_array = mask.cpu().numpy()
+#         for value in mask_array:
+#             # Write each mask value to the file, converting float to int for readability
+#             f.write(f"{int(value)}\n")
+
+#     return mask
+
+
+def obtain_bn_mask(bn_name, bn_module, thre, device):
+    # Remove the unnecessary .to(device) operation for the threshold (thre)
+    # Since thre is a float, it doesn't need to be moved to a device.
     mask = bn_module.weight.data.abs().ge(thre).float()
 
-    bn_mask_file_name = f'checking_data/bn_masks/{bn_module}_bn_mask.txt'
-        # Save the mask to a file in a human-readable format
+    bn_mask_file_name = f'checking_data/bn_masks/{bn_name}_bn_mask.txt'
+    # Save the mask to a file in a human-readable format
     with open(bn_mask_file_name, 'w') as f:
         # Convert the mask to a numpy array for easy iteration
         mask_array = mask.cpu().numpy()
@@ -105,8 +123,48 @@ def obtain_bn_mask(bn_module, thre, device):
 
     return mask
 
+def new_mask(selected_layers, model_list):
+    # Initialize an empty dictionary to store masks for selected BN layers
+    masks = {}
+    
+    # Iterate over selected_bn_layers
+    for layer_name in selected_layers:
+        # Get the corresponding BatchNorm layer
+        bn_layer = model_list[layer_name]
+    
+        # Find the maximum absolute weight value
+        max_weight = bn_layer.weight.data.abs().max().item()
+    
+        # Move the condition tensor to the CUDA device
+        condition = (bn_layer.weight.data.abs() == max_weight).to(bn_layer.weight.device)
+    
+        # Generate a mask to retain only the maximum weight
+        mask = torch.where(condition, torch.tensor(1, device=bn_layer.weight.device), torch.tensor(0, device=bn_layer.weight.device))
+    
+        # Store the mask for the current BN layer
+        masks[layer_name] = mask
+    
+    # Save the masks to a text file
+    with open('checking_data/masks.txt', 'w') as f:
+        for layer_name, mask in masks.items():
+            f.write(f'Layer: {layer_name}\n')
+            f.write(f'Mask: {mask}\n')
+            f.write('\n')
+    return masks
 
 #######CUSTOM FUNCTIONS###########
+# Function to save all model layers to a file
+def save_model_layers(model):
+    file_path = 'checking_data/all_layers.txt'
+    with open(file_path, 'w') as file:
+        for name, module in model.named_modules():
+            # Prepare a more human-readable format for the layer configuration
+            config = str(module).replace('\n', ', ').replace('  ', '').replace('(', ': (')
+            if name:  # To avoid saving the empty name representing the whole model
+                file.write(f"Layer Name: {name}\n")
+                file.write(f"Type: {type(module).__name__}\n")
+                file.write(f"Config: {config}\n\n")
+
 def save_layerwise_abs_weights_to_file(model, file_path):
     with open(file_path, 'w') as file:
         for name, module in model.named_modules():
@@ -240,6 +298,81 @@ def save_bn_conv_params(model, filepath):
         file.write(f"\nTotal Number of Parameters (from connected Conv layers to BN layers): {total_params}\n")
 
 
+def get_selected_layers_to_prune(model_list,model, percent_new):
+    # Flatten all BN weights and sort them
+    print(f'MODEL_LIST :{model_list}')
+    print("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
+    total_conv_weights  = 0
+
+    for k,v in model_list.items():
+        # print(k,v)
+        
+        conv_name = k.rsplit('.', 1)[0] + '.conv'  # This might need adjustment
+        conv_layer = dict(model.named_modules()).get(conv_name, None)
+                
+        if conv_layer and isinstance(conv_layer, nn.Conv2d):
+                    # Calculate the number of parameters in the Conv layer
+                    # Parameters = out_channels * (in_channels * kernel_height * kernel_width)
+            conv_params = conv_layer.out_channels * (conv_layer.in_channels * 
+                                                             conv_layer.kernel_size[0] * conv_layer.kernel_size[1])
+            total_conv_weights += conv_params  # Accumulate the total parameters
+    print(f'Total CONV Parameters: {total_conv_weights}')
+    params_to_prune = int(total_conv_weights * percent_new)
+    print(f'Parameters to purne: {params_to_prune}')
+
+    selected_bn_layers = []
+    cumulative_params = 0
+    for k,v in model_list.items():
+        # print(k,v)
+        
+        conv_name = k.rsplit('.', 1)[0] + '.conv'  # This might need adjustment
+        conv_layer = dict(model.named_modules()).get(conv_name, None)
+                
+        if conv_layer and isinstance(conv_layer, nn.Conv2d):
+                    # Calculate the number of parameters in the Conv layer
+                    # Parameters = out_channels * (in_channels * kernel_height * kernel_width)
+            conv_params = conv_layer.out_channels * (conv_layer.in_channels * 
+                                                             conv_layer.kernel_size[0] * conv_layer.kernel_size[1])
+            cumulative_params += conv_params  # Accumulate the total parameters
+            selected_bn_layers.append(k)
+            if cumulative_params >= params_to_prune:
+                break
+    # new_mask(selected_bn_layers, model_list)
+    print(f'TOTAL BN LAYERS TILL REACHING TARGET : {selected_bn_layers}')
+    print(f'CUMULATIVE PARAMS : {cumulative_params}')
+    print("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
+
+    return selected_bn_layers
+
+
+def calculate_dynamic_threshold(model_list,model, percent_new):
+    
+    all_bn_weights = torch.cat([mod.weight.data.abs().flatten() for mod in model_list.values()])
+    print(f'ALL BN WEIGHTS : {len(all_bn_weights)}')    
+    sorted_weights = torch.sort(all_bn_weights)[0]
+    print(f'SORTED WRIGHTS : {sorted_weights}')
+
+    print(f'LEN SORTED Weights: {len(sorted_weights)}')
+
+    # Calculate total parameters and the target number of parameters to prune
+    total_params = sum([mod.weight.data.numel() for mod in model_list.values()])
+    print(f'TOTAL Parameters : {total_params}')
+    params_to_prune = int(total_params * percent_new)
+    print(f'params_to_prune : {params_to_prune}')
+
+    # Accumulate weights from the smallest, until the target number of parameters to prune is reached
+    cumulative_params = 0
+    for i, weight in enumerate(sorted_weights):
+        cumulative_params += (sorted_weights <= weight).sum().item()  # Count parameters <= current weight
+        if cumulative_params >= params_to_prune:
+            threshold = weight.item()
+            break
+
+    return threshold
+
+
+
+
 #######END CUSTOM FUNCTIONS###########
 
 
@@ -284,6 +417,8 @@ def run_prune(data,
     model = model.model
     model.eval()
 
+    #saving all layers of the model in a text file:
+    save_model_layers(model)
     # After loading and configuring your model
     save_layerwise_abs_weights_to_file(model, 'checking_data/layerwise_abs_weights.txt')
     save_bn_layers_absolute_weights(model, 'checking_data/sorted_bn_weights.txt')
@@ -367,6 +502,15 @@ def run_prune(data,
     # Collect the weights of all BN layers that need pruning
     bn_weights = gather_bn_weights(model_list)
     sorted_bn = torch.sort(bn_weights)[0]
+    print(f'Sorted Bn :> {sorted_bn}')
+    sorted_weights_str = "\n".join([str(weight.item()) for weight in sorted_bn])
+
+    # Define the file path
+    file_path = 'checking_data/ORG_sorted_bn_weights.txt'
+    
+    # Save the sorted weights to a text file
+    with open(file_path, 'w') as f:
+        f.write(sorted_weights_str)
 
     # Avoid the highest threshold that would prune all channels 
     # (the smallest maximum value of gamma for each BN layer is the threshold upper limit).
@@ -394,6 +538,22 @@ def run_prune(data,
     #######
     thre_index = int(len(sorted_bn) * percent)
     thre = sorted_bn[thre_index]
+
+    # Use this function in your pruning logic to determine the dynamic threshold
+    threshold = calculate_dynamic_threshold(model_list,model, opt.percent_new)
+    print(f'DYNAMIC THRESHOLD CAL: {threshold}')
+
+
+
+    
+
+    
+    selected_bn_layers = get_selected_layers_to_prune(model_list,model, opt.percent_new)
+    new_masks = new_mask(selected_bn_layers, model_list)
+    print(f'NEW MASKS : {new_masks}')
+    # Calculate dynamic threshold based on percent_new instead of a fixed threshold
+    # thre_index = int(len(sorted_bn) * opt.percent_new)  # Use percent_new here
+    # thre = sorted_bn[thre_index]
 
     #######
     print(f"Threshold index: len(sorted_bn) * percent = thre_index ")
@@ -473,7 +633,7 @@ def run_prune(data,
                 # mask = torch.ones(bn_layer.weight.data.size()).cuda()
                 mask = torch.ones(bn_layer.weight.data.size()).to(device)
             else:
-                mask = obtain_bn_mask(bn_layer, thre, device)
+                mask = obtain_bn_mask(bn_name, bn_layer, threshold, device)
 
             maskbndict[bn_name] = mask
             # Number of remaining channels in the current layer
@@ -484,9 +644,35 @@ def run_prune(data,
             remain_num += layer_remain
 
             # Set the weights and biases of the BN layers that need pruning to zero
+
+            ####REAL MASKING HAPPENING HERE####
+            
             bn_layer.weight.data.mul_(mask)
             bn_layer.bias.data.mul_(mask)
             print(f"|\t{bn_name:<25}{'|':<10}{bn_layer.weight.data.size()[0]:<20}{'|':<10}{layer_remain:<20}|")
+    # Iterate over each layer in the model to set masks
+    # for bn_name, bn_layer in model.named_modules():
+    #     if isinstance(bn_layer, nn.BatchNorm2d):
+    #         if bn_name in new_masks:
+    #             # Use the pre-defined mask from NEW_MASKS for specific layers
+    #             mask = new_masks[bn_name].to(device)
+    #         else:
+    #             # If the layer is in the ignore list, don't prune (use all ones mask)
+    #             mask = torch.ones(bn_layer.weight.data.size()).to(device)
+    #         # else:
+    #         #     # Compute the mask for layers not in NEW_MASKS and not in ignore_bn_list
+    #         #     mask = obtain_bn_mask(bn_name, bn_layer, threshold, device)
+            
+    #         maskbndict[bn_name] = mask
+    #         layer_remain = int(mask.sum())
+    #         assert layer_remain > 0, "Current remaining channel must be greater than 0!!! Please set prune percent to a lower thresh, or you can retrain a more sparse model..."
+            
+    #         remain_num += layer_remain
+    
+    #         # Apply the mask
+    #         bn_layer.weight.data.mul_(mask)
+    #         bn_layer.bias.data.mul_(mask)
+    #         print(f"|\t{bn_name:<25}{'|':<10}{bn_layer.weight.data.size()[0]:<20}{'|':<10}{layer_remain:<20}|")
 
     print("=" * 94)
 
