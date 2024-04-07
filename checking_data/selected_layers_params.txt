@@ -1,8 +1,8 @@
-Target Percentage: 0.1% of Total Parameters: 1772.035 (Approx.)
+Target Percentage: 0.1% of Total Parameters: 7035.811 (Approx.)
 Selected layers and parameters to reach ~0.1%:
-model.0.conv.weight: 1728 params
-model.0.bn.weight: 16 params
-model.0.bn.bias: 16 params
+model.0.conv.weight: 3456 params
+model.0.bn.weight: 32 params
+model.0.bn.bias: 32 params
 
-Total Selected Parameters: 1760
-Total Model Parameters: 1772035
+Total Selected Parameters: 3520
+Total Model Parameters: 7035811

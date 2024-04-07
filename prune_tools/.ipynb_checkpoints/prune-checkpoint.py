@@ -123,34 +123,50 @@ def obtain_bn_mask(bn_name, bn_module, thre, device):
 
     return mask
 
-def new_mask(selected_layers, model_list):
-    # Initialize an empty dictionary to store masks for selected BN layers
-    masks = {}
+# def new_mask(layer_name):
+
     
-    # Iterate over selected_bn_layers
-    for layer_name in selected_layers:
-        # Get the corresponding BatchNorm layer
-        bn_layer = model_list[layer_name]
+#     # Find the maximum absolute weight value
+#     max_weight = layer_name.weight.data.abs().max().item()
+            
+#     # Move the condition tensor to the CUDA device
+#     condition = (layer_name.weight.data.abs() == max_weight).to(layer_name.weight.device)
+            
+#     # Generate a mask to retain only the maximum weight
+#     mask = torch.where(condition, torch.tensor(1, device=layer_name.weight.device), torch.tensor(0, device=layer_name.weight.device))
+        
+#     # Save the masks to a text file
+#     with open('checking_data/masks.txt', 'w') as f:
+#         f.write(f'Layer: {layer_name}\n')
+#         f.write(f'Mask: {mask}\n')
+#         f.write('\n')
+#     return mask
+
+def new_mask(layer_name):
+    # Get the absolute values of the weights
+    abs_weights = layer_name.weight.data.abs()
     
-        # Find the maximum absolute weight value
-        max_weight = bn_layer.weight.data.abs().max().item()
+    # Find the top 2 maximum weight values
+    top2_weights = torch.topk(abs_weights.view(-1), 2).values
     
-        # Move the condition tensor to the CUDA device
-        condition = (bn_layer.weight.data.abs() == max_weight).to(bn_layer.weight.device)
-    
-        # Generate a mask to retain only the maximum weight
-        mask = torch.where(condition, torch.tensor(1, device=bn_layer.weight.device), torch.tensor(0, device=bn_layer.weight.device))
-    
-        # Store the mask for the current BN layer
-        masks[layer_name] = mask
-    
+    if len(top2_weights) > 1:
+        # If there are at least 2 unique weights, use the second-highest weight as the threshold
+        second_highest_weight = top2_weights[-1].item()
+    else:
+        # If there's only one unique weight (all weights are the same), use that weight as the threshold
+        second_highest_weight = top2_weights[0].item()
+
+    # Generate a mask: 1 for weights >= second_highest_weight, 0 otherwise
+    mask = (abs_weights >= second_highest_weight).float().to(layer_name.weight.device)
+
     # Save the masks to a text file
-    with open('checking_data/masks.txt', 'w') as f:
-        for layer_name, mask in masks.items():
-            f.write(f'Layer: {layer_name}\n')
-            f.write(f'Mask: {mask}\n')
-            f.write('\n')
-    return masks
+    with open('checking_data/masks.txt', 'a') as f:  # Open in append mode to not overwrite previous masks
+        layer_identification = f"{layer_name.__class__.__name__} ({layer_name})"  # Example layer identification
+        f.write(f'Layer: {layer_identification}\n')
+        f.write(f'Mask:\n{mask}\n\n')
+
+    return mask
+
 
 #######CUSTOM FUNCTIONS###########
 # Function to save all model layers to a file
@@ -300,7 +316,7 @@ def save_bn_conv_params(model, filepath):
 
 def get_selected_layers_to_prune(model_list,model, percent_new):
     # Flatten all BN weights and sort them
-    print(f'MODEL_LIST :{model_list}')
+    # print(f'MODEL_LIST :{model_list}')
     print("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
     total_conv_weights  = 0
 
@@ -334,11 +350,11 @@ def get_selected_layers_to_prune(model_list,model, percent_new):
             conv_params = conv_layer.out_channels * (conv_layer.in_channels * 
                                                              conv_layer.kernel_size[0] * conv_layer.kernel_size[1])
             cumulative_params += conv_params  # Accumulate the total parameters
-            selected_bn_layers.append(k)
+            selected_bn_layers.append(v)
             if cumulative_params >= params_to_prune:
                 break
     # new_mask(selected_bn_layers, model_list)
-    print(f'TOTAL BN LAYERS TILL REACHING TARGET : {selected_bn_layers}')
+    # print(f'TOTAL BN LAYERS TILL REACHING TARGET : {selected_bn_layers}')
     print(f'CUMULATIVE PARAMS : {cumulative_params}')
     print("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
 
@@ -348,17 +364,17 @@ def get_selected_layers_to_prune(model_list,model, percent_new):
 def calculate_dynamic_threshold(model_list,model, percent_new):
     
     all_bn_weights = torch.cat([mod.weight.data.abs().flatten() for mod in model_list.values()])
-    print(f'ALL BN WEIGHTS : {len(all_bn_weights)}')    
+    # print(f'ALL BN WEIGHTS : {len(all_bn_weights)}')    
     sorted_weights = torch.sort(all_bn_weights)[0]
-    print(f'SORTED WRIGHTS : {sorted_weights}')
+    # print(f'SORTED WRIGHTS : {sorted_weights}')
 
-    print(f'LEN SORTED Weights: {len(sorted_weights)}')
+    # print(f'LEN SORTED Weights: {len(sorted_weights)}')
 
     # Calculate total parameters and the target number of parameters to prune
     total_params = sum([mod.weight.data.numel() for mod in model_list.values()])
-    print(f'TOTAL Parameters : {total_params}')
+    # print(f'TOTAL Parameters : {total_params}')
     params_to_prune = int(total_params * percent_new)
-    print(f'params_to_prune : {params_to_prune}')
+    # print(f'params_to_prune : {params_to_prune}')
 
     # Accumulate weights from the smallest, until the target number of parameters to prune is reached
     cumulative_params = 0
@@ -474,7 +490,7 @@ def run_prune(data,
     bn_layer_names = list(model_list.keys())
     bn_layer_values = list(model_list.values())
     bn_weights_counts = [len(model_list[bn_name].weight.data) for bn_name in bn_layer_names]
-    print(f'bn_weights_counts : {bn_weights_counts}')
+    # print(f'bn_weights_counts : {bn_weights_counts}')
     total_model_list_weight_count = len(bn_weights_counts)
 
     # with open('bn_layers_name_val.txt', 'w') as f:
@@ -502,7 +518,7 @@ def run_prune(data,
     # Collect the weights of all BN layers that need pruning
     bn_weights = gather_bn_weights(model_list)
     sorted_bn = torch.sort(bn_weights)[0]
-    print(f'Sorted Bn :> {sorted_bn}')
+    # print(f'Sorted Bn :> {sorted_bn}')
     sorted_weights_str = "\n".join([str(weight.item()) for weight in sorted_bn])
 
     # Define the file path
@@ -526,22 +542,22 @@ def run_prune(data,
     # Find the percentage corresponding to the index of highest_thre
     percent_limit = (sorted_bn == highest_thre).nonzero()[0, 0].item() / len(bn_weights)
 
-    print(f'Suggested Gamma threshold should be less than {highest_thre:.4f}.')
-    print(f'The corresponding prune ratio is {percent_limit:.3f}')
+    # print(f'Suggested Gamma threshold should be less than {highest_thre:.4f}.')
+    # print(f'The corresponding prune ratio is {percent_limit:.3f}')
 
     assert percent_limit > percent, f'The pruning ratio should not exceed {percent_limit * 100:.3f}%!'
 
     # model_copy = deepcopy(model)
     # Obtain the pruning threshold according to the specified percentage
     #######
-    print(f"SORTED BN LENGTH: {len(sorted_bn)}")
+    # print(f"SORTED BN LENGTH: {len(sorted_bn)}")
     #######
     thre_index = int(len(sorted_bn) * percent)
     thre = sorted_bn[thre_index]
 
     # Use this function in your pruning logic to determine the dynamic threshold
     threshold = calculate_dynamic_threshold(model_list,model, opt.percent_new)
-    print(f'DYNAMIC THRESHOLD CAL: {threshold}')
+    # print(f'DYNAMIC THRESHOLD CAL: {threshold}')
 
 
 
@@ -549,18 +565,18 @@ def run_prune(data,
 
     
     selected_bn_layers = get_selected_layers_to_prune(model_list,model, opt.percent_new)
-    new_masks = new_mask(selected_bn_layers, model_list)
-    print(f'NEW MASKS : {new_masks}')
+    # new_masks = new_mask(selected_bn_layers, model_list)
+    # print(f'NEW MASKS : {new_masks}')
     # Calculate dynamic threshold based on percent_new instead of a fixed threshold
     # thre_index = int(len(sorted_bn) * opt.percent_new)  # Use percent_new here
     # thre = sorted_bn[thre_index]
 
     #######
-    print(f"Threshold index: len(sorted_bn) * percent = thre_index ")
-    print(f"Threshold index: {len(sorted_bn)} * {percent} = {thre_index} ")
-    print(f"thre: {thre}")
+    # print(f"Threshold index: len(sorted_bn) * percent = thre_index ")
+    # print(f"Threshold index: {len(sorted_bn)} * {percent} = {thre_index} ")
+    # print(f"thre: {thre}")
     #######
-    print(f'Gamma value that less than {thre:.4f} are set to zero!')
+    # print(f'Gamma value that less than {thre:.4f} are set to zero!')
     print("=" * 94)
     print(f"|\t{'layer name':<25}{'|':<10}{'origin channels':<20}{'|':<10}{'remaining channels':<20}|")
 
@@ -626,14 +642,39 @@ def run_prune(data,
     # ============================================================================== #
     maskbndict = {}
 
-    # Output the pruning information for each layer
+    # # Output the pruning information for each layer
+    # for bn_name, bn_layer in model.named_modules():
+    #     if isinstance(bn_layer, nn.BatchNorm2d):
+    #         if bn_name in ignore_bn_list:
+    #             # mask = torch.ones(bn_layer.weight.data.size()).cuda()
+    #             mask = torch.ones(bn_layer.weight.data.size()).to(device)
+    #         else:
+    #             mask = obtain_bn_mask(bn_name, bn_layer, threshold, device)
+
+    #         maskbndict[bn_name] = mask
+    #         # Number of remaining channels in the current layer
+    #         layer_remain = int(mask.sum())
+    #         assert layer_remain > 0, "Current remaining channel must greater than 0!!! " \
+    #                                  "please set prune percent to lower thesh, or you can retrain a more sparse model..."
+    #         # Calculate the total number of remaining channels
+    #         remain_num += layer_remain
+
+    #         # Set the weights and biases of the BN layers that need pruning to zero
+
+    #         ####REAL MASKING HAPPENING HERE####
+            
+    #         bn_layer.weight.data.mul_(mask)
+    #         bn_layer.bias.data.mul_(mask)
+    #         print(f"|\t{bn_name:<25}{'|':<10}{bn_layer.weight.data.size()[0]:<20}{'|':<10}{layer_remain:<20}|")
     for bn_name, bn_layer in model.named_modules():
         if isinstance(bn_layer, nn.BatchNorm2d):
             if bn_name in ignore_bn_list:
                 # mask = torch.ones(bn_layer.weight.data.size()).cuda()
                 mask = torch.ones(bn_layer.weight.data.size()).to(device)
+            elif bn_layer in selected_bn_layers:
+                mask = new_mask(bn_layer)
             else:
-                mask = obtain_bn_mask(bn_name, bn_layer, threshold, device)
+                mask = torch.ones(bn_layer.weight.data.size()).to(device)
 
             maskbndict[bn_name] = mask
             # Number of remaining channels in the current layer
@@ -650,29 +691,6 @@ def run_prune(data,
             bn_layer.weight.data.mul_(mask)
             bn_layer.bias.data.mul_(mask)
             print(f"|\t{bn_name:<25}{'|':<10}{bn_layer.weight.data.size()[0]:<20}{'|':<10}{layer_remain:<20}|")
-    # Iterate over each layer in the model to set masks
-    # for bn_name, bn_layer in model.named_modules():
-    #     if isinstance(bn_layer, nn.BatchNorm2d):
-    #         if bn_name in new_masks:
-    #             # Use the pre-defined mask from NEW_MASKS for specific layers
-    #             mask = new_masks[bn_name].to(device)
-    #         else:
-    #             # If the layer is in the ignore list, don't prune (use all ones mask)
-    #             mask = torch.ones(bn_layer.weight.data.size()).to(device)
-    #         # else:
-    #         #     # Compute the mask for layers not in NEW_MASKS and not in ignore_bn_list
-    #         #     mask = obtain_bn_mask(bn_name, bn_layer, threshold, device)
-            
-    #         maskbndict[bn_name] = mask
-    #         layer_remain = int(mask.sum())
-    #         assert layer_remain > 0, "Current remaining channel must be greater than 0!!! Please set prune percent to a lower thresh, or you can retrain a more sparse model..."
-            
-    #         remain_num += layer_remain
-    
-    #         # Apply the mask
-    #         bn_layer.weight.data.mul_(mask)
-    #         bn_layer.bias.data.mul_(mask)
-    #         print(f"|\t{bn_name:<25}{'|':<10}{bn_layer.weight.data.size()[0]:<20}{'|':<10}{layer_remain:<20}|")
 
     print("=" * 94)
 
@@ -738,6 +756,15 @@ def run_prune(data,
 
                 out_idx = np.squeeze(np.argwhere(np.asarray(maskbndict[layername[:-4] + "bn"].cpu().numpy())))
                 w = layer.weight.data[out_idx, :, :, :].clone()
+                print(f"Layer: {layername}, Expected Shape: 4, Actual Shape: {len(w.shape)}, Shape Details: {w.shape}")
+
+                if len(w.shape) == 3:
+                    w = w.unsqueeze(0)  # Add a dimension at the beginning
+                elif len(w.shape) == 2:
+                    w = w.unsqueeze(0).unsqueeze(0)  # Add two dimensions at the beginning
+
+                print(f"Layer: {layername}, Expected Shape: 4, Actual Shape: {len(w.shape)}, Shape Details: {w.shape}")
+
                 assert len(w.shape) == 4
                 pruned_layer.weight.data = w.clone()
                 changed_state.append(layername + ".weight")

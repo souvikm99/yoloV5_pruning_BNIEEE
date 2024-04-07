@@ -1,0 +1,171 @@
+Layer: BatchNorm2d
+Weights Shape: torch.Size([16])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([32])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([16])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([16])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([32])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([16])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([16])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([32])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([32])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([32])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([32])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([32])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([32])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([128])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([128])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([256])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([128])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([128])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([256])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([128])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([128])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([128])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([256])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([128])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([128])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([32])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([32])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([32])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([32])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([128])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([64])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([128])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([128])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([128])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([256])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([128])
+
+Layer: BatchNorm2d
+Weights Shape: torch.Size([128])
+
