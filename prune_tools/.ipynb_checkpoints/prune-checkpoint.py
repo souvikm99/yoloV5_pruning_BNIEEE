@@ -26,6 +26,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import yaml
 
 FILE = Path(__file__).resolve()
@@ -142,30 +143,195 @@ def obtain_bn_mask(bn_name, bn_module, thre, device):
 #         f.write('\n')
 #     return mask
 
-def new_mask(layer_name):
+# def new_mask(layer_name):
+#     # Get the absolute values of the weights
+#     abs_weights = layer_name.weight.data.abs()
+    
+#     # Find the top 2 maximum weight values
+#     top2_weights = torch.topk(abs_weights.view(-1), 2).values
+    
+#     if len(top2_weights) > 1:
+#         # If there are at least 2 unique weights, use the second-highest weight as the threshold
+#         second_highest_weight = top2_weights[-1].item()
+#     else:
+#         # If there's only one unique weight (all weights are the same), use that weight as the threshold
+#         second_highest_weight = top2_weights[0].item()
+
+#     # Generate a mask: 1 for weights >= second_highest_weight, 0 otherwise
+#     mask = (abs_weights >= second_highest_weight).float().to(layer_name.weight.device)
+
+#     # Save the masks to a text file
+#     with open('checking_data/masks.txt', 'a') as f:  # Open in append mode to not overwrite previous masks
+#         layer_identification = f"{layer_name.__class__.__name__} ({layer_name})"  # Example layer identification
+#         f.write(f'Layer: {layer_identification}\n')
+#         f.write(f'Mask:\n{mask}\n\n')
+
+#     return mask
+
+
+def prune_layers(csv_file_path, target_pruned_params):
+    df = pd.read_csv(csv_file_path)
+    df.columns = df.columns.str.strip()
+    
+    df_sorted = df.sort_values(by='difference', ascending=False)
+    
+    prune_dict = {}
+    total_pruned = 0
+
+    print("Pruning breakdown:")
+    
+    while total_pruned < target_pruned_params:
+        for index, row in df_sorted.iterrows():
+            bn_layer = row['bn layer']
+            original_channels = row['orignal_channles']
+            difference = row['difference']
+            
+            already_pruned = prune_dict.get(bn_layer, 0)
+            max_prunable = max(0, original_channels - 2 - already_pruned)
+            
+            if max_prunable <= 0:
+                continue
+            
+            params_needed = target_pruned_params - total_pruned
+            channels_to_prune = min(max_prunable, max(1, params_needed // difference))
+            
+            if channels_to_prune > 0:
+                prune_dict[bn_layer] = already_pruned + channels_to_prune
+                total_pruned_now = channels_to_prune * difference
+                total_pruned += total_pruned_now
+
+                print(f"Layer: {bn_layer}, Channels pruned: {channels_to_prune}, Parameters removed: {total_pruned_now}")
+
+            if total_pruned >= target_pruned_params:
+                break
+
+        # Check for possible infinite loop (no layers can be further pruned)
+        if params_needed == target_pruned_params - total_pruned:
+            print("No more layers can be pruned without violating constraints.")
+            break
+
+    print(f'Total paramters will be removed : {total_pruned}\n  because {total_pruned}~{target_pruned_params}')
+    # print(f"\nTotal parameters to be pruned: {total_pruned}")
+    print("\nPrune dictionary (layer: channels to prune):")
+    for layer, channels in prune_dict.items():
+        print(f"{layer}: {channels}")
+    
+    return prune_dict
+
+
+# def new_mask(bn_name, model):
+#     # Retrieve the layer object using its name
+#     bn_layer = dict(model.named_modules())[bn_name]
+    
+#     # Ensure bn_layer is actually a batch normalization layer
+#     if not isinstance(bn_layer, nn.BatchNorm2d):
+#         raise ValueError(f"Layer {bn_name} is not a BatchNorm2d layer.")
+    
+#     # Get the absolute values of the weights
+#     abs_weights = bn_layer.weight.data.abs()
+    
+#     # Find the top 2 maximum weight values
+#     top2_weights = torch.topk(abs_weights.view(-1), 2).values
+    
+#     if len(top2_weights) > 1:
+#         # If there are at least 2 unique weights, use the second-highest weight as the threshold
+#         second_highest_weight = top2_weights[-1].item()
+#     else:
+#         # If there's only one unique weight (all weights are the same), use that weight as the threshold
+#         second_highest_weight = top2_weights[0].item()
+
+#     # Generate a mask: 1 for weights >= second_highest_weight, 0 otherwise
+#     mask = (abs_weights >= second_highest_weight).float().to(bn_layer.weight.device)
+
+#     # Save the masks to a text file
+#     with open('checking_data/masks.txt', 'a') as f:  # Open in append mode to not overwrite previous masks
+#         layer_identification = f"{bn_layer.__class__.__name__} ({bn_name})"  # Example layer identification
+#         f.write(f'Layer: {layer_identification}\n')
+#         f.write(f'Mask:\n{mask}\n\n')
+
+#     return mask
+
+def new_mask(bn_name, model, num_channels_to_prune):
+    # Retrieve the layer object using its name
+    bn_layer = dict(model.named_modules())[bn_name]
+    
+    # Ensure bn_layer is actually a batch normalization layer
+    if not isinstance(bn_layer, nn.BatchNorm2d):
+        raise ValueError(f"Layer {bn_name} is not a BatchNorm2d layer.")
+    
     # Get the absolute values of the weights
-    abs_weights = layer_name.weight.data.abs()
+    abs_weights = bn_layer.weight.data.abs()
     
-    # Find the top 2 maximum weight values
-    top2_weights = torch.topk(abs_weights.view(-1), 2).values
+    # Sort the weights to find the smallest ones
+    sorted_weights, sorted_indices = torch.sort(abs_weights.view(-1))
     
-    if len(top2_weights) > 1:
-        # If there are at least 2 unique weights, use the second-highest weight as the threshold
-        second_highest_weight = top2_weights[-1].item()
-    else:
-        # If there's only one unique weight (all weights are the same), use that weight as the threshold
-        second_highest_weight = top2_weights[0].item()
-
-    # Generate a mask: 1 for weights >= second_highest_weight, 0 otherwise
-    mask = (abs_weights >= second_highest_weight).float().to(layer_name.weight.device)
-
+    # Initialize the mask with ones
+    mask = torch.ones_like(abs_weights).view(-1)
+    
+    # Set the smallest weights to zero according to the number of channels to prune
+    if num_channels_to_prune > 0:
+        mask[sorted_indices[:num_channels_to_prune]] = 0
+    
+    # Reshape the mask back to the original shape
+    mask = mask.view_as(bn_layer.weight.data).to(bn_layer.weight.device)
+    
     # Save the masks to a text file
     with open('checking_data/masks.txt', 'a') as f:  # Open in append mode to not overwrite previous masks
-        layer_identification = f"{layer_name.__class__.__name__} ({layer_name})"  # Example layer identification
+        layer_identification = f"{bn_layer.__class__.__name__} ({bn_name})"
         f.write(f'Layer: {layer_identification}\n')
         f.write(f'Mask:\n{mask}\n\n')
 
     return mask
+
+def one_mask(bn_name, model):
+    # Retrieve the layer object using its name
+    bn_layer = dict(model.named_modules())[bn_name]
+    
+    # Ensure bn_layer is actually a batch normalization layer
+    if not isinstance(bn_layer, nn.BatchNorm2d):
+        raise ValueError(f"Layer {bn_name} is not a BatchNorm2d layer.")
+    
+    # Get the absolute values of the weights
+    abs_weights = bn_layer.weight.data.abs()
+    
+    # Find the minimum weight value
+    min_weight_value, min_weight_idx = torch.min(abs_weights, dim=0)
+
+    # Initialize the mask with ones
+    mask = torch.ones_like(abs_weights)
+    # Set the weight with the smallest absolute value to 0 in the mask
+    mask.view(-1)[min_weight_idx] = 0
+
+    # Save the masks to a text file
+    with open('checking_data/masks.txt', 'a') as f:  # Open in append mode to not overwrite previous masks
+        layer_identification = f"{bn_layer.__class__.__name__} ({bn_name})"
+        f.write(f'Layer: {layer_identification}\n')
+        f.write(f'Mask:\n{mask}\n\n')
+
+    return mask
+
+# Example of how to use the modified new_mask function
+# Assuming 'model' is your PyTorch model and 'bn_name' is the name of a batch normalization layer
+# mask = new_mask('model.0.bn', model)
+
+
+# def one_mask(layer_name):
+#     # Get the absolute values of the weights
+#     abs_weights = layer_name.weight.data.abs()
+    
+#     # Find the minimum weight value
+#     min_weight = torch.min(abs_weights).item()
+
+#     # Generate a mask: 0 for the minimum weight value, 1 otherwise
+#     mask = (abs_weights > min_weight).float().to(layer_name.weight.device)
+
+#     # Save the masks to a text file
+#     with open('checking_data/masks.txt', 'a') as f:  # Open in append mode
+#         layer_identification = f"{layer_name.__class__.__name__} ({layer_name})"
+#         f.write(f'Layer: {layer_identification}\n')
+#         f.write(f'Mask:\n{mask}\n\n')
+
+#     return mask
 
 
 #######CUSTOM FUNCTIONS###########
@@ -314,52 +480,102 @@ def save_bn_conv_params(model, filepath):
         file.write(f"\nTotal Number of Parameters (from connected Conv layers to BN layers): {total_params}\n")
 
 
-def get_selected_layers_to_prune(model_list,model, percent_new):
-    # Flatten all BN weights and sort them
-    # print(f'MODEL_LIST :{model_list}')
-    print("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
-    total_conv_weights  = 0
+# def get_selected_layers_to_prune(model_list,model, percent_new):
+#     # Flatten all BN weights and sort them
+#     # print(f'MODEL_LIST :{model_list}')
+#     print("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
+#     total_conv_weights  = 0
 
-    for k,v in model_list.items():
-        # print(k,v)
+#     for k,v in model_list.items():
+#         # print(k,v)
         
+#         conv_name = k.rsplit('.', 1)[0] + '.conv'  # This might need adjustment
+#         conv_layer = dict(model.named_modules()).get(conv_name, None)
+                
+#         if conv_layer and isinstance(conv_layer, nn.Conv2d):
+#                     # Calculate the number of parameters in the Conv layer
+#                     # Parameters = out_channels * (in_channels * kernel_height * kernel_width)
+#             conv_params = conv_layer.out_channels * (conv_layer.in_channels * 
+#                                                              conv_layer.kernel_size[0] * conv_layer.kernel_size[1])
+#             total_conv_weights += conv_params  # Accumulate the total parameters
+#     print(f'Total CONV Parameters: {total_conv_weights}')
+#     params_to_prune = int(total_conv_weights * percent_new)
+#     print(f'Parameters to purne: {params_to_prune}')
+
+#     selected_bn_layers = []
+#     cumulative_params = 0
+#     for k,v in model_list.items():
+#         # print(k,v)
+        
+#         conv_name = k.rsplit('.', 1)[0] + '.conv'  # This might need adjustment
+#         conv_layer = dict(model.named_modules()).get(conv_name, None)
+                
+#         if conv_layer and isinstance(conv_layer, nn.Conv2d):
+#                     # Calculate the number of parameters in the Conv layer
+#                     # Parameters = out_channels * (in_channels * kernel_height * kernel_width)
+#             conv_params = conv_layer.out_channels * (conv_layer.in_channels * 
+#                                                              conv_layer.kernel_size[0] * conv_layer.kernel_size[1])
+#             cumulative_params += conv_params  # Accumulate the total parameters
+#             selected_bn_layers.append(v)
+#             if cumulative_params >= params_to_prune:
+#                 break
+#     # new_mask(selected_bn_layers, model_list)
+#     # print(f'TOTAL BN LAYERS TILL REACHING TARGET : {selected_bn_layers}')
+#     print(f'CUMULATIVE PARAMS : {cumulative_params}')
+#     print("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
+
+#     return selected_bn_layers
+
+def get_selected_layers_to_prune(model_list, model, percent_new):
+    print("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
+    total_conv_weights = 0
+
+    for k, v in model_list.items():
         conv_name = k.rsplit('.', 1)[0] + '.conv'  # This might need adjustment
         conv_layer = dict(model.named_modules()).get(conv_name, None)
                 
         if conv_layer and isinstance(conv_layer, nn.Conv2d):
-                    # Calculate the number of parameters in the Conv layer
-                    # Parameters = out_channels * (in_channels * kernel_height * kernel_width)
+            # Calculate the number of parameters in the Conv layer
             conv_params = conv_layer.out_channels * (conv_layer.in_channels * 
-                                                             conv_layer.kernel_size[0] * conv_layer.kernel_size[1])
-            total_conv_weights += conv_params  # Accumulate the total parameters
+                                                     conv_layer.kernel_size[0] * conv_layer.kernel_size[1])
+            total_conv_weights += conv_params  # Accumulate the total
+
     print(f'Total CONV Parameters: {total_conv_weights}')
     params_to_prune = int(total_conv_weights * percent_new)
-    print(f'Parameters to purne: {params_to_prune}')
+    print(f'Parameters to prune: {params_to_prune}')
 
     selected_bn_layers = []
+    selected_bn_layers_txt = []
     cumulative_params = 0
-    for k,v in model_list.items():
-        # print(k,v)
-        
+    for k, v in model_list.items():
         conv_name = k.rsplit('.', 1)[0] + '.conv'  # This might need adjustment
         conv_layer = dict(model.named_modules()).get(conv_name, None)
                 
         if conv_layer and isinstance(conv_layer, nn.Conv2d):
-                    # Calculate the number of parameters in the Conv layer
-                    # Parameters = out_channels * (in_channels * kernel_height * kernel_width)
             conv_params = conv_layer.out_channels * (conv_layer.in_channels * 
-                                                             conv_layer.kernel_size[0] * conv_layer.kernel_size[1])
-            cumulative_params += conv_params  # Accumulate the total parameters
+                                                     conv_layer.kernel_size[0] * conv_layer.kernel_size[1])
+            cumulative_params += conv_params
             selected_bn_layers.append(v)
+            selected_bn_layers_txt.append(k)
             if cumulative_params >= params_to_prune:
                 break
-    # new_mask(selected_bn_layers, model_list)
-    # print(f'TOTAL BN LAYERS TILL REACHING TARGET : {selected_bn_layers}')
+
     print(f'CUMULATIVE PARAMS : {cumulative_params}')
     print("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
 
+    # Save the selected_bn_layers to a text file
+    with open('checking_data/selected_bn_layers.txt', 'w') as file:
+        for item in selected_bn_layers_txt:
+            file.write(f"{item}\n")
+
     return selected_bn_layers
 
+def get_total_target_params(model, percent):
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f'Total Prunable Parameters in model: {total_params}')
+    target_params_to_prune = int(total_params*percent)
+    print(f'{percent*100}% of total paramters is: {target_params_to_prune}')
+    return target_params_to_prune
 
 def calculate_dynamic_threshold(model_list,model, percent_new):
     
@@ -445,7 +661,7 @@ def run_prune(data,
     total_params = save_total_model_parameters(model, 'checking_data/total_model_parameters.txt')
     # Calculate what the passed percentage of total parameters would be
     percent_params = calculate_percentage_of_parameters(total_params, opt.percent_new)
-    print(f"{opt.percent_new}% of Total Parameters: {percent_params:.0f}")
+    # print(f"{opt.percent_new}% of Total Parameters: {percent_params:.0f}")
     # Use this function to calculate and save layers and parameters
     accumulate_parameters_to_percentage(model, opt.percent_new, 'checking_data/selected_layers_params.txt')
     #layer wise channel parameter for each connected bn layer
@@ -564,7 +780,20 @@ def run_prune(data,
     
 
     
-    selected_bn_layers = get_selected_layers_to_prune(model_list,model, opt.percent_new)
+    # selected_bn_layers = get_selected_layers_to_prune(model_list,model, opt.percent_new)
+    # selected_bn_layers = get_selected_layers_to_prune(model_list,model, opt.percent_new)
+    # print(selected_bn_layers)
+
+    selected_bn_layers = []
+    
+    # Example usage
+    csv_file_path = './yolov5s_formula - Sheet1 (1).csv'  # Replace with your actual CSV file path
+    # target_pruned_params = 10000  # Example target number of parameters to prune
+
+    
+    target_params = get_total_target_params(model, opt.percent_new)
+    prune_dict = prune_layers(csv_file_path, target_params)
+    # print(f'PRUNE DICT : {prune_dict}')
     # new_masks = new_mask(selected_bn_layers, model_list)
     # print(f'NEW MASKS : {new_masks}')
     # Calculate dynamic threshold based on percent_new instead of a fixed threshold
@@ -668,26 +897,27 @@ def run_prune(data,
     #         print(f"|\t{bn_name:<25}{'|':<10}{bn_layer.weight.data.size()[0]:<20}{'|':<10}{layer_remain:<20}|")
     for bn_name, bn_layer in model.named_modules():
         if isinstance(bn_layer, nn.BatchNorm2d):
+            # Check if layer should be ignored
             if bn_name in ignore_bn_list:
-                # mask = torch.ones(bn_layer.weight.data.size()).cuda()
                 mask = torch.ones(bn_layer.weight.data.size()).to(device)
-            elif bn_layer in selected_bn_layers:
-                mask = new_mask(bn_layer)
+            # Check if layer is selected for pruning and in prune_dict
+            elif bn_name in prune_dict:
+                # Get the number of channels to prune for this layer from prune_dict
+                channels_to_prune = prune_dict[bn_name]
+                # Call new_mask function with the number of channels to prune
+                mask = new_mask(bn_name, model, channels_to_prune)
             else:
+                # Default case where layer is not pruned
                 mask = torch.ones(bn_layer.weight.data.size()).to(device)
-
+    
             maskbndict[bn_name] = mask
-            # Number of remaining channels in the current layer
+            # Calculate the number of remaining channels after pruning
             layer_remain = int(mask.sum())
-            assert layer_remain > 0, "Current remaining channel must greater than 0!!! " \
-                                     "please set prune percent to lower thesh, or you can retrain a more sparse model..."
-            # Calculate the total number of remaining channels
+            assert layer_remain > 0, "Current remaining channel must be greater than 0!!!"
+    
             remain_num += layer_remain
-
-            # Set the weights and biases of the BN layers that need pruning to zero
-
-            ####REAL MASKING HAPPENING HERE####
-            
+    
+            # Apply the mask to zero out pruned weights and biases
             bn_layer.weight.data.mul_(mask)
             bn_layer.bias.data.mul_(mask)
             print(f"|\t{bn_name:<25}{'|':<10}{bn_layer.weight.data.size()[0]:<20}{'|':<10}{layer_remain:<20}|")
